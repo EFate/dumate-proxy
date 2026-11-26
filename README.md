@@ -153,6 +153,13 @@ Magpie 插件本身只负责登录与官方网关请求，不要求填写本地�
 
 浏览器与手动方式会通过 `https://console.bce.baidu.com/api/dumate/user/info` 验证 Cookie；成功后 Cookie 保存在 Magpie 账号记录中。桌面端账号在客户端重新登录后会由 `auth.refresh` 自动读取新 Cookie。
 
+### 额度与签到
+
+插件实现 Magpie 的 `auth.usage` 与 `auth.checkin` 钩子：
+
+- 额度：读取 `/api/dumate/points/quota_overview` 与 `/api/dumate/points/loginBonusInfo`，展示剩余积分、已用积分、最近到期套餐和累计签到天数。
+- 签到：读取当天签到状态；未签到时调用 `/api/dumate/points/loginBonus`，再复查积分变化并返回实际到账积分。
+- 登录过期时返回 `signIn: "expired"`，由 Magpie 引导重新登录。
 ### 登录态使用
 
 模型请求由插件直接发送到官方网关：先从百度控制台换取 gateway token，再请求 `https://dumate-svc.baidu.com/gateway/apis/v1/chat/completions`。token 做单飞缓存；401 或跳转登录页时清除缓存并返回 `X-Magpie-Sign-In: expired`，让 Magpie 引导重新登录。
