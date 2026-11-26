@@ -143,6 +143,21 @@ magpie plugin add /absolute/path/to/dumate-plugin
 - 生图模型固定 `tool_call:false`、`reasoning:false`、`attachment:false`。
 - `loader.fetch` 放行 `/models`、`/chat/completions`、`/images/generations`、`/images/edits` 及对应 `/v1/*` 路径；Proxy API key 只会发给反代 origin。
 
+### 登录方式
+
+Magpie 会显示四种登录入口：
+
+- **反代已配置登录态**：只检查 `/healthz`，适合已经用 `DUMATE_COOKIE` 或 Cookie 文件启动反代的部署。
+- **服务器本机 DuMate 桌面端登录态**：反代从所在主机的 `qianfan-desktop-app/auth.json` 与 `.cookie-key` 只读导入，适合桌面端与反代同机部署。
+- **浏览器登录：粘贴 Network 请求头 Cookie**：打开百度登录页，登录后从 DevTools Network 复制请求头 Cookie 值，插件将其交给反代校验并保存。
+- **手动粘贴 Cookie 字符串**：在 Magpie 表单里直接粘贴完整 Cookie 请求头，插件校验 `bce-sessionid` 后交给反代保存。
+
+通过插件登录写入的 Cookie 保存在反代状态目录的 `runtime-cookie.json`（默认 `~/.config/dumate-proxy`），权限为 `0600`，反代重启后继续有效。Cookie 不会写回 Magpie 账号记录，账号记录只保存来源、账号名和尾号。
+
+反代新增两个内部接口：
+
+- `POST /v1/auth/login`：接收 `{ "cookie": "...", "source": "browser|manual" }`，校验 DuMate 账号信息后写入运行时登录态。
+- `POST /v1/auth/desktop`：读取反代本机桌面端登录态，不修改客户端文件。
 ### 登录后保活
 
 插件遵循 Magpie 的 OAuth 续期契约：

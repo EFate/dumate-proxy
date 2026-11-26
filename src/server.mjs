@@ -123,6 +123,46 @@ async function handleRequest(request, reply, deps) {
     return
   }
 
+  if (path === "/v1/auth/login" || path === "/auth/login") {
+    if (request.method !== "POST") {
+      sendJson(reply, 405, { error: { message: "method not allowed", type: "invalid_request_error" } })
+      return
+    }
+    const body = await readJson(request, config.maxBodyBytes)
+    const raw = String(body.cookie ?? body.cookieHeader ?? "").trim()
+    if (!raw) {
+      sendJson(reply, 400, { error: { message: "缺少 cookie", type: "invalid_request_error" } })
+      return
+    }
+    const source = String(body.source || "plugin").slice(0, 32)
+    try {
+      await auth.setCookie(raw, source)
+      const info = await auth.userInfo()
+      const header = await auth.cookieHeader()
+      sendJson(reply, 200, { status: "ok", login: "ok", source, ...info, cookieTail: header.slice(-4) })
+    } catch (error) {
+      const payload = errorPayload(error)
+      sendJson(reply, payload.error.type === "authentication_error" ? 401 : 502, payload)
+    }
+    return
+  }
+
+  if (path === "/v1/auth/desktop" || path === "/auth/desktop") {
+    if (request.method !== "POST") {
+      sendJson(reply, 405, { error: { message: "method not allowed", type: "invalid_request_error" } })
+      return
+    }
+    try {
+      await auth.useDesktopLogin()
+      const info = await auth.userInfo()
+      const header = await auth.cookieHeader()
+      sendJson(reply, 200, { status: "ok", login: "ok", source: "desktop", ...info, cookieTail: header.slice(-4) })
+    } catch (error) {
+      const payload = errorPayload(error)
+      sendJson(reply, payload.error.type === "authentication_error" ? 401 : 502, payload)
+    }
+    return
+  }
   if (path === "/healthz" || path === "/health") {
     let login = "ok"
     try { await auth.cookieHeader() } catch { login = "missing" }

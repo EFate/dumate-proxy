@@ -77,3 +77,12 @@ test("refreshGatewayToken forces a new gateway token", async () => {
   assert.equal(refreshed, "tok-2")
   assert.equal(calls, 2)
 })
+
+test("runtime cookie survives a new DuMateAuth instance", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dumate-runtime-"))
+  const config = { consoleBase: "https://console.bce.baidu.com", stateDir: dir, userAgent: "test", requestTimeoutMs: 5000 }
+  const first = new DuMateAuth(config)
+  await first.setCookie("bce-sessionid=abc; BDUSS=xyz", "manual")
+  const second = new DuMateAuth(config)
+  assert.equal(await second.cookieHeader(), "bce-sessionid=abc; BDUSS=xyz")
+})

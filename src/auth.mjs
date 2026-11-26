@@ -1,10 +1,11 @@
 import { createDecipheriv, createHash } from "node:crypto"
-import { readFileSync, statSync } from "node:fs"
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { desktopUserDataDir } from "./paths.mjs"
 
 const SKEW_MS = 5 * 60 * 1000
 const FALLBACK_TOKEN_TTL_MS = 60 * 60 * 1000
+const RUNTIME_COOKIE_FILE = "runtime-cookie.json"
 
 export function parseCookieString(raw) {
   const out = []
@@ -105,10 +106,59 @@ export class DuMateAuth {
     this.fetchImpl = fetchImpl
     this.cookieCache = null
     this.tokens = new Map()
+    this.stateDir = config.stateDir || "."
+    this.runtimeCookiePath = join(this.stateDir, RUNTIME_COOKIE_FILE)
   }
 
+  readRuntimeCookie() {
+    try {
+      const text = readFileSync(this.runtimeCookiePath, "utf8")
+      if (text.length > 1024 * 1024) return undefined
+      const data = JSON.parse(text)
+      const cookies = parseCookieString(String(data?.cookie ?? ""))
+      if (!cookies.length) return undefined
+      return { cookies, source: String(data?.source || "runtime") }
+    } catch {
+      return undefined
+    }
+  }
+
+  async setCookies(cookies, source = "plugin", persist = true) {
+    const list = Array.isArray(cookies) ? cookies : []
+    if (!list.length) throw signInError()
+    const header = buildCookieHeader(list, new URL(this.config.consoleBase).hostname)
+    if (!header) throw signInError()
+    if (persist) {
+      mkdirSync(this.stateDir, { recursive: true })
+      writeFileSync(this.runtimeCookiePath, JSON.stringify({ cookie: header, source, updatedAt: Date.now() }, null, 2) + "\n", { mode: 0o600 })
+    }
+    this.cookieCache = { cookies: list, source }
+    this.tokens.clear()
+    return { cookies: list, source, cookieHeader: header }
+  }
+
+  async setCookie(raw, source = "plugin") {
+    return this.setCookies(parseCookieString(raw), source, true)
+  }
+
+  async useDesktopLogin() {
+    const login = readDesktopLogin({ userDataDir: this.config.userDataDir || desktopUserDataDir() })
+    if (!login) throw signInError()
+    return this.setCookies(login.cookies, "desktop", false)
+  }
+
+  async userInfo() {
+    const info = await this.consoleJson("/api/dumate/user/info")
+    return {
+      accountId: String(info?.bceAccountId ?? info?.userId ?? "DuMate Proxy"),
+      name: String(info?.displayName ?? info?.realName ?? ""),
+    }
+  }
   async resolveCookies() {
     if (this.cookieCache) return this.cookieCache
+
+    const runtime = this.readRuntimeCookie()
+    if (runtime) return runtime
 
     if (this.config.cookie) {
       const cookies = parseCookieString(this.config.cookie)

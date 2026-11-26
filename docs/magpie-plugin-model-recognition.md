@@ -32,6 +32,16 @@ LLM 输出模态固定为 `["text"]`。生图模型 `dumate-image0.1` 输出模�
 
 Proxy API key 只会发给配置中的反代地址，避免凭据泄漏到其他域名。
 
+## 登录方式
+
+插件向 Magpie 注册四种登录入口：
+
+1. 反代已配置登录态：检查 `/healthz`。
+2. 服务器本机桌面端登录态：反代只读读取 `auth.json` 与 `.cookie-key`。
+3. 浏览器登录：打开百度登录页，复制 DevTools Network 请求头 Cookie，交给 `POST /v1/auth/login` 校验并保存。
+4. 手动粘贴 Cookie：表单输入完整 Cookie 请求头，校验 `bce-sessionid` 后交给 `POST /v1/auth/login`。
+
+登录成功后，Cookie 只保存在反代状态目录的 `runtime-cookie.json`，Magpie 账号记录只保留来源、账号名和 Cookie 尾号。反代重启后会优先读取这份运行时登录态。
 ## 登录保活
 
 插件声明：

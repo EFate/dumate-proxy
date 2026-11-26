@@ -26,9 +26,13 @@ const catalog = {
 }
 
 let keepaliveCalls = 0
+let loginCalls = []
 const auth = {
   async cookieHeader() { return "a=1" },
   async refreshGatewayToken() { keepaliveCalls++; return "tok" },
+  async setCookie(cookie, source) { loginCalls.push({ cookie, source }) },
+  async useDesktopLogin() { loginCalls.push({ source: "desktop" }) },
+  async userInfo() { return { accountId: "acct-1", name: "DuMate User" } },
   invalidate() {},
 }
 
@@ -123,4 +127,33 @@ test("POST /v1/keepalive refreshes the gateway token", async () => {
     assert.equal(body.login, "ok")
     assert.equal(keepaliveCalls, 1)
   })
+})
+
+
+test("POST /v1/auth/login installs a runtime cookie", async () => {
+  loginCalls = []
+  await withServer(null, async (base) => {
+    const response = await fetch(base + "/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cookie: "bce-sessionid=abc; BDUSS=xyz", source: "browser" }),
+    })
+    const body = await response.json()
+    assert.equal(response.status, 200)
+    assert.equal(body.accountId, "acct-1")
+    assert.equal(body.source, "browser")
+  })
+  assert.equal(loginCalls[0].source, "browser")
+})
+
+test("POST /v1/auth/desktop reads a desktop login", async () => {
+  loginCalls = []
+  await withServer(null, async (base) => {
+    const response = await fetch(base + "/v1/auth/desktop", { method: "POST" })
+    const body = await response.json()
+    assert.equal(response.status, 200)
+    assert.equal(body.source, "desktop")
+    assert.equal(body.accountId, "acct-1")
+  })
+  assert.equal(loginCalls[0].source, "desktop")
 })

@@ -143,6 +143,57 @@ test("entry exports only one plugin function with a usable sign-in method", asyn
   const hooks = await functions[0]({ config: {}, catalog, proxyUrl: "http://127.0.0.1:8799/v1" })
   assert.equal(hooks.auth.provider, "dumate")
   assert.match(hooks.auth.icon, /^data:image\/png;base64,/)
-  assert.equal(hooks.auth.methods.length, 1)
+  assert.equal(hooks.auth.methods.length, 4)
+  assert.ok(hooks.auth.methods.some((method) => method.label.includes("浏览器登录")))
+  assert.ok(hooks.auth.methods.some((method) => method.label.includes("手动粘贴")))
+  assert.ok(hooks.auth.methods.some((method) => method.label.includes("桌面端")))
   assert.equal(typeof hooks.auth.methods[0].authorize, "function")
+})
+
+
+test("all sign-in methods validate cookies through the proxy", async () => {
+  const calls = []
+  const fetchImpl = async (url, init) => {
+    calls.push({ url: String(url), init })
+    const body = init?.body ? JSON.parse(init.body) : {}
+    return new Response(JSON.stringify({
+      status: "ok",
+      login: "ok",
+      source: body.source || (String(url).includes("/v1/auth/desktop") ? "desktop" : "proxy"),
+      accountId: "acct-1",
+      name: "DuMate User",
+      cookieTail: "abcd",
+    }), { status: 200, headers: { "content-type": "application/json" } })
+  }
+  const plugin = await DuMateProxyPlugin({
+    config: {},
+    catalog,
+    proxyUrl: "http://127.0.0.1:8799/v1",
+    proxyKey: "proxy-secret",
+    fetchImpl,
+  })
+  const [proxyMethod, desktopMethod, browserMethod, manualMethod] = plugin.auth.methods
+
+  const proxyAuth = await proxyMethod.authorize()
+  assert.equal((await proxyAuth.callback()).accountId, "acct-1")
+
+  const desktopAuth = await desktopMethod.authorize()
+  const desktop = await desktopAuth.callback()
+  assert.equal(desktop.source, "desktop")
+
+  const browserAuth = await browserMethod.authorize()
+  assert.equal(browserAuth.method, "code")
+  const browser = await browserAuth.callback("bce-sessionid=abc; BDUSS=xyz")
+  assert.equal(browser.source, "browser")
+
+  const manualAuth = await manualMethod.authorize({ cookie: "bce-sessionid=abc; BDUSS=xyz" })
+  const manual = await manualAuth.callback()
+  assert.equal(manual.source, "manual")
+
+  const rejected = await browserAuth.callback("document.cookie=fake")
+  assert.equal(rejected.type, "failed")
+
+  const authCalls = calls.filter((call) => call.url.includes("/v1/auth/"))
+  assert.equal(authCalls.length, 3)
+  assert.ok(authCalls.every((call) => call.init.headers.Authorization === "Bearer proxy-secret"))
 })
