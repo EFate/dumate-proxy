@@ -3,7 +3,8 @@ import { loadConfig } from "../src/config.mjs"
 import { loadCatalog } from "../src/catalog.mjs"
 import { DuMateAuth } from "../src/auth.mjs"
 import { GatewayClient } from "../src/gateway.mjs"
-import { createProxyServer } from "../src/server.mjs"
+import { _internal } from "../src/server.mjs"
+const { createProxyServer } = _internal
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`dumate-proxy — OpenAI-compatible DuMate reverse proxy

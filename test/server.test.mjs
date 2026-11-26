@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createProxyServer } from "../src/server.mjs"
+import { _internal } from "../src/server.mjs"
+const { createProxyServer } = _internal
 
 const config = {
   apiKey: undefined,

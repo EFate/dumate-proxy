@@ -99,7 +99,7 @@ function pipeUpstream(upstream, reply) {
   stream.pipe(reply)
 }
 
-export function createProxyServer({ config, auth, gateway, catalog, fetchImpl = fetch }) {
+function createProxyServer({ config, auth, gateway, catalog, fetchImpl = fetch }) {
   return createServer((request, reply) => {
     handleRequest(request, reply, { config, auth, gateway, catalog, fetchImpl }).catch((error) => {
       if (reply.headersSent) {
@@ -301,4 +301,4 @@ async function handleImageEdits(request, reply, deps) {
   sendJson(reply, result.status, result.body)
 }
 
-export { sendJson, errorPayload }
+export const _internal = { createProxyServer, sendJson, errorPayload }

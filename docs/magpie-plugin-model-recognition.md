@@ -39,8 +39,9 @@ Proxy API key 只会发给配置中的反代地址，避免凭据泄漏到其他
 - `auth.refresh`
 - `auth.refreshLead = 10min`
 - `auth.keepAlive = true`
+- `auth.single = true`，重复登录复用同一个账号槽位
 
-sign-in 结果包含 55 分钟有效期。Magpie 会在到期前触发续期，并在账号空闲时后台保活。续期逻辑调用反代的 `POST /v1/keepalive`，该接口强制刷新 DuMate gateway token，但不返回 token 内容。
+登录入口会先请求 `/healthz`：只有反代报告 DuMate 登录态可用时才会保存账号，否则返回明确的失败提示。sign-in 结果包含 55 分钟有效期。Magpie 会在到期前触发续期，并在账号空闲时后台保活。续期逻辑调用反代的 `POST /v1/keepalive`，该接口强制刷新 DuMate gateway token，但不返回 token 内容。
 
 错误语义：
 

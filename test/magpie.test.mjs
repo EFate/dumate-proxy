@@ -1,7 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { importCatalog } from "../src/catalog.mjs"
-import { DuMateProxyPlugin, toMagpieModels } from "../magpie.mjs"
+import { DuMateProxyPlugin, _internal } from "../magpie.mjs"
+const { toMagpieModels } = _internal
 
 const raw = {
   model: "QianfanPersonalQuota/glm-5",
@@ -126,4 +127,21 @@ test("auth hook declares Magpie keep-alive and renews through proxy", async () =
   const result = await authorize.callback()
   assert.equal(result.type, "success")
   assert.ok(result.expires > Date.now())
+})
+
+
+test("server entry does not expose functions to the plugin host", async () => {
+  const module = await import("../src/server.mjs")
+  assert.equal(Object.values(module).filter((value) => typeof value === "function").length, 0)
+  assert.equal(typeof module._internal.createProxyServer, "function")
+})
+
+test("entry exports only one plugin function with a usable sign-in method", async () => {
+  const module = await import("../magpie.mjs")
+  const functions = [...new Set(Object.values(module).filter((value) => typeof value === "function"))]
+  assert.equal(functions.length, 1)
+  const hooks = await functions[0]({ config: {}, catalog, proxyUrl: "http://127.0.0.1:8799/v1" })
+  assert.equal(hooks.auth.provider, "dumate")
+  assert.equal(hooks.auth.methods.length, 1)
+  assert.equal(typeof hooks.auth.methods[0].authorize, "function")
 })

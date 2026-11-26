@@ -16,6 +16,7 @@
 - gateway token 单飞缓存、提前刷新、401 自动失效。
 - 模型清单快照只保存元数据，不含 Cookie、token、API key 或本地代理地址。
 - 支持 Magpie provider plugin 模型识别、登录续期与后台保活。
+- Magpie 供应商页会显示可点击的 DuMate 登录入口；登录时检查反代健康状态与 DuMate 登录态。
 
 ## 启动
 
