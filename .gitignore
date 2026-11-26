@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.env
+.state/
+coverage/
+.DS_Store
+.publish/

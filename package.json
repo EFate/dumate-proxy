@@ -1,0 +1,51 @@
+{
+  "name": "dumate-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenAI-compatible DuMate reverse proxy with LLM and image-generation support",
+  "type": "module",
+  "main": "./magpie.mjs",
+  "bin": {
+    "dumate-proxy": "./bin/dumate-proxy.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md",
+    "magpie.mjs"
+  ],
+  "scripts": {
+    "start": "node bin/dumate-proxy.mjs",
+    "dev": "node --watch bin/dumate-proxy.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/config.mjs && node --check src/paths.mjs && node --check src/auth.mjs && node --check src/catalog.mjs && node --check src/gateway.mjs && node --check src/image.mjs && node --check src/server.mjs && node --check bin/dumate-proxy.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "dumate",
+    "proxy",
+    "openai-compatible",
+    "llm",
+    "image-generation"
+  ],
+  "license": "MIT",
+  "exports": {
+    ".": "./magpie.mjs",
+    "./magpie": "./magpie.mjs",
+    "./server": "./src/server.mjs",
+    "./package.json": "./package.json"
+  },
+  "magpie": {
+    "name": "dumate-proxy",
+    "summary": {
+      "zh": "DuMate 本地反代：OpenAI 兼容 LLM 与生图模型，自动识别模型清单。",
+      "en": "Local DuMate reverse proxy with OpenAI-compatible LLM and image models."
+    },
+    "maxConcurrency": 4,
+    "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxYjZlZjMiLz48cGF0aCBkPSJNMTggNDJjOC0xOCAyMC0yNiAzMC0yOC0yIDEyLTEwIDI0LTIyIDMwbC04IDR6IiBmaWxsPSIjZmZmIi8+PGNpcmNsZSBjeD0iNDEiIGN5PSIyNSIgcj0iNSIgZmlsbD0iI2ZmZDE2NiIvPjwvc3ZnPg=="
+  }
+}
