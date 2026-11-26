@@ -145,34 +145,19 @@ magpie plugin add /absolute/path/to/dumate-plugin
 
 ### 登录方式
 
-Magpie 会显示四种登录入口：
+Magpie 插件本身只负责登录与官方网关请求，不要求填写本地反代地址：
 
-- **反代已配置登录态**：只检查 `/healthz`，适合已经用 `DUMATE_COOKIE` 或 Cookie 文件启动反代的部署。
-- **服务器本机 DuMate 桌面端登录态**：反代从所在主机的 `qianfan-desktop-app/auth.json` 与 `.cookie-key` 只读导入，适合桌面端与反代同机部署。
-- **浏览器登录：粘贴 Network 请求头 Cookie**：打开百度登录页，登录后从 DevTools Network 复制请求头 Cookie 值，插件将其交给反代校验并保存。
-- **手动粘贴 Cookie 字符串**：在 Magpie 表单里直接粘贴完整 Cookie 请求头，插件校验 `bce-sessionid` 后交给反代保存。
+- **百度搭子桌面端登录态**：读取 `qianfan-desktop-app/auth.json` 与 `.cookie-key`，只读复用本机客户端登录态。
+- **百度账号浏览器登录**：打开百度登录页，登录后从 DevTools Network 复制请求头 Cookie 并粘贴。
+- **手动粘贴 Cookie 字符串**：直接粘贴包含 `bce-sessionid` 的完整 Cookie 请求头。
 
-通过插件登录写入的 Cookie 保存在反代状态目录的 `runtime-cookie.json`（默认 `~/.config/dumate-proxy`），权限为 `0600`，反代重启后继续有效。Cookie 不会写回 Magpie 账号记录，账号记录只保存来源、账号名和尾号。
+浏览器与手动方式会通过 `https://console.bce.baidu.com/api/dumate/user/info` 验证 Cookie；成功后 Cookie 保存在 Magpie 账号记录中。桌面端账号在客户端重新登录后会由 `auth.refresh` 自动读取新 Cookie。
 
-每个登录入口都会要求填写 **DuMate 反代地址**，用于覆盖插件启动时的默认值。Docker 部署请填宿主机可达地址，例如 `http://host.docker.internal:8787/v1`、`http://172.17.0.1:8787/v1` 或 Compose 服务名，不要用容器内的 `127.0.0.1`。如果 Magpie 登录页显示“代理：全局代理”且连接失败，请把该次登录的代理改成“直连”。
-反代新增两个内部接口：
+### 登录态使用
 
-- `POST /v1/auth/login`：接收 `{ "cookie": "...", "source": "browser|manual" }`，校验 DuMate 账号信息后写入运行时登录态。
-- `POST /v1/auth/desktop`：读取反代本机桌面端登录态，不修改客户端文件。
-### 登录后保活
+模型请求由插件直接发送到官方网关：先从百度控制台换取 gateway token，再请求 `https://dumate-svc.baidu.com/gateway/apis/v1/chat/completions`。token 做单飞缓存；401 或跳转登录页时清除缓存并返回 `X-Magpie-Sign-In: expired`，让 Magpie 引导重新登录。
 
-插件遵循 Magpie 的 OAuth 续期契约：
-
-- `auth.refresh` 调用反代的 `POST /v1/keepalive`
-- `auth.refreshLead = 10min`
-- `auth.keepAlive = true`
-- sign-in 的 `expires` 设为 55 分钟后，Magpie 会提前续期并在账号空闲时后台保活
-- `/v1/keepalive` 强制刷新 DuMate gateway token，不返回 token 内容
-
-代理临时不可达时只让 Magpie 退避重试；代理明确报告 DuMate 登录态缺失时才把账号标记为需要重新登录。
-
-更多实现细节见 `docs/magpie-plugin-model-recognition.md`。
-
+这里没有本地反代 IP 或端口配置；独立反代进程仍可供其他 OpenAI 兼容客户端使用。
 ## 测试
 
 ```bash

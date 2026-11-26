@@ -34,27 +34,12 @@ Proxy API key 只会发给配置中的反代地址，避免凭据泄漏到其他
 
 ## 登录方式
 
-插件向 Magpie 注册四种登录入口：
+插件遵循 Magpie provider plugin 的登录契约，提供三种入口：桌面端只读复用、百度账号浏览器登录、手动粘贴 Cookie。后两者先请求百度控制台 `/api/dumate/user/info` 验证 Cookie，成功后把 Cookie 数组与账号信息交给 Magpie 保存。
 
-1. 反代已配置登录态：检查 `/healthz`。
-2. 服务器本机桌面端登录态：反代只读读取 `auth.json` 与 `.cookie-key`。
-3. 浏览器登录：打开百度登录页，复制 DevTools Network 请求头 Cookie，交给 `POST /v1/auth/login` 校验并保存。
-4. 手动粘贴 Cookie：表单输入完整 Cookie 请求头，校验 `bce-sessionid` 后交给 `POST /v1/auth/login`。
+桌面端账号在客户端重新登录后，由 `auth.refresh` 读取新的 `auth.json` 登录态并更新账号。其他来源的 Cookie 没有刷新接口，过期时由请求链路标记 `signIn: "expired"`。
 
-登录表单提供 `proxyUrl` 与可选 `proxyKey` 输入；登录成功后，账号记录会带上这两个值，后续续期和模型请求都按该地址访问反代。Docker 部署应填写宿主机可达地址，并把登录页代理改为直连，避免全局代理拦截本地地址。
-登录成功后，Cookie 只保存在反代状态目录的 `runtime-cookie.json`，Magpie 账号记录只保留来源、账号名和 Cookie 尾号。反代重启后会优先读取这份运行时登录态。
-## 登录保活
+## 登录态使用
 
-插件声明：
+`auth.loader(getAuth)` 从当前账号读取 Cookie，请求百度控制台 `/api/dumate/app/token/get` 换取 gateway token，然后只向官方 `GATEWAY_BASE/chat/completions` 发请求。token 按 Cookie 单飞缓存；401 或 3xx 登录跳转会清缓存并返回 `X-Magpie-Sign-In: expired`。
 
-- `auth.refresh`
-- `auth.refreshLead = 10min`
-- `auth.keepAlive = true`
-- `auth.single = true`，重复登录复用同一个账号槽位
-
-登录入口会先请求 `/healthz`：只有反代报告 DuMate 登录态可用时才会保存账号，否则返回明确的失败提示。sign-in 结果包含 55 分钟有效期。Magpie 会在到期前触发续期，并在账号空闲时后台保活。续期逻辑调用反代的 `POST /v1/keepalive`，该接口强制刷新 DuMate gateway token，但不返回 token 内容。
-
-错误语义：
-
-- 反代临时不可达：抛出普通错误，交给 Magpie 退避重试
-- 反代明确报告 DuMate 登录态缺失：抛出 `signIn: "expired"`，让账号进入重新登录流程
+生图模型在插件内翻译成 DuMate 网关所需的 `prompt` 请求，再包装为 OpenAI chat/image 响应。
