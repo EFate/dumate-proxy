@@ -142,6 +142,7 @@ test("entry exports only one plugin function with a usable sign-in method", asyn
   assert.equal(functions.length, 1)
   const hooks = await functions[0]({ config: {}, catalog, proxyUrl: "http://127.0.0.1:8799/v1" })
   assert.equal(hooks.auth.provider, "dumate")
+  assert.match(hooks.auth.icon, /^data:image\/png;base64,/)
   assert.equal(hooks.auth.methods.length, 1)
   assert.equal(typeof hooks.auth.methods[0].authorize, "function")
 })
