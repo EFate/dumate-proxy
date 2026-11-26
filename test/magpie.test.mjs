@@ -197,3 +197,28 @@ test("all sign-in methods validate cookies through the proxy", async () => {
   assert.equal(authCalls.length, 3)
   assert.ok(authCalls.every((call) => call.init.headers.Authorization === "Bearer proxy-secret"))
 })
+
+
+test("login form can use a reachable proxy URL and loader keeps it", async () => {
+  const calls = []
+  const fetchImpl = async (url, init) => {
+    calls.push({ url: String(url), init })
+    return new Response(JSON.stringify({ status: "ok", login: "ok", source: "browser", accountId: "acct-2", name: "DuMate User", cookieTail: "wxyz" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, proxyUrl: "http://127.0.0.1:8799/v1", fetchImpl })
+  const browser = await plugin.auth.methods[2].authorize({ proxyUrl: "http://127.0.0.1:8899/v1", proxyKey: "custom-key" })
+  const seat = await browser.callback("bce-sessionid=abc; BDUSS=xyz")
+  assert.equal(seat.proxyUrl, "http://127.0.0.1:8899/v1")
+  assert.equal(seat.proxyKey, "custom-key")
+  assert.ok(calls[0].url.startsWith("http://127.0.0.1:8899/v1/auth/login"))
+
+  const loader = await plugin.loader(async () => seat)
+  assert.equal(loader.baseURL, "http://127.0.0.1:8899/v1")
+  assert.equal(loader.apiKey, "custom-key")
+  const ok = await loader.fetch("http://127.0.0.1:8899/v1/models")
+  assert.equal(ok.status, 200)
+  assert.equal(calls.at(-1).init.headers.get("authorization"), "Bearer custom-key")
+})

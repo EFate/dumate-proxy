@@ -41,6 +41,7 @@ Proxy API key 只会发给配置中的反代地址，避免凭据泄漏到其他
 3. 浏览器登录：打开百度登录页，复制 DevTools Network 请求头 Cookie，交给 `POST /v1/auth/login` 校验并保存。
 4. 手动粘贴 Cookie：表单输入完整 Cookie 请求头，校验 `bce-sessionid` 后交给 `POST /v1/auth/login`。
 
+登录表单提供 `proxyUrl` 与可选 `proxyKey` 输入；登录成功后，账号记录会带上这两个值，后续续期和模型请求都按该地址访问反代。Docker 部署应填写宿主机可达地址，并把登录页代理改为直连，避免全局代理拦截本地地址。
 登录成功后，Cookie 只保存在反代状态目录的 `runtime-cookie.json`，Magpie 账号记录只保留来源、账号名和 Cookie 尾号。反代重启后会优先读取这份运行时登录态。
 ## 登录保活
 

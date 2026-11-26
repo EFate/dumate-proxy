@@ -154,6 +154,7 @@ Magpie 会显示四种登录入口：
 
 通过插件登录写入的 Cookie 保存在反代状态目录的 `runtime-cookie.json`（默认 `~/.config/dumate-proxy`），权限为 `0600`，反代重启后继续有效。Cookie 不会写回 Magpie 账号记录，账号记录只保存来源、账号名和尾号。
 
+每个登录入口都会要求填写 **DuMate 反代地址**，用于覆盖插件启动时的默认值。Docker 部署请填宿主机可达地址，例如 `http://host.docker.internal:8787/v1`、`http://172.17.0.1:8787/v1` 或 Compose 服务名，不要用容器内的 `127.0.0.1`。如果 Magpie 登录页显示“代理：全局代理”且连接失败，请把该次登录的代理改成“直连”。
 反代新增两个内部接口：
 
 - `POST /v1/auth/login`：接收 `{ "cookie": "...", "source": "browser|manual" }`，校验 DuMate 账号信息后写入运行时登录态。
