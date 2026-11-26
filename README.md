@@ -2,7 +2,7 @@
 
 把百度搭子 DuMate 的个人额度暴露成一套 OpenAI 兼容反代，同时覆盖 **LLM 对话** 与 **生图模型**。
 
-基于 `.ref/dumate-rance` 与 `.ref/magpie-dumate` 的登录态复用方案重构，运行层使用 Node.js 22+ 原生能力（ESM、`fetch`、`ReadableStream`、`FormData`、`AbortSignal.timeout`、AES-256-GCM），无第三方运行时依赖。
+运行层使用 Node.js 22+ 原生能力（ESM、`fetch`、`ReadableStream`、`FormData`、`AbortSignal.timeout`、AES-256-GCM），无第三方运行时依赖。
 
 ## 能力
 
@@ -11,10 +11,11 @@
   - LLM：透传 OpenAI 兼容请求，支持 SSE 流式、工具调用与推理档位规范化。
   - 生图模型：自动把 `messages` 转成 DuMate 网关所需的 `prompt` 请求，并把图片结果包装成 Markdown 图片消息。
 - `POST /v1/images/generations`：标准 OpenAI 生图接口，支持 `url` / `b64_json`。
-- `POST /v1/images/edits`： multipart 图片编辑入口，会把图片转 data URL 后交给生图模型。
+- `POST /v1/images/edits`：multipart 图片编辑入口，会把图片转 data URL 后交给生图模型。
 - 桌面端登录态只读复用：`auth.json` + `.cookie-key` 在内存中解密，不修改 DuMate 文件。
 - gateway token 单飞缓存、提前刷新、401 自动失效。
 - 模型清单快照只保存元数据，不含 Cookie、token、API key 或本地代理地址。
+- 支持 Magpie provider plugin 模型识别、登录续期与后台保活。
 
 ## 启动
 
@@ -28,7 +29,7 @@ node bin/dumate-proxy.mjs
 curl http://127.0.0.1:8787/healthz
 ```
 
-首次启动会自动读取当前账号的 `opencode.json`，若桌面端未登录或路径不同，可设置：
+首次启动会自动读取当前账号的 `opencode.json`。若桌面端未登录或路径不同，可设置：
 
 ```powershell
 $env:DUMATE_USER_DATA_DIR = "C:\Users\<你>\AppData\Roaming\qianfan-desktop-app"
@@ -56,6 +57,7 @@ node bin/dumate-proxy.mjs
 | `DUMATE_PROXY_API_KEY` | 空 | 设置后客户端需带 `Authorization: Bearer <key>` |
 | `DUMATE_MODEL` | `model-text` | 默认对话模型 |
 | `DUMATE_IMAGE_MODEL` | `dumate-image0.1` | 默认生图模型 |
+| `DUMATE_PROXY_URL` | `http://127.0.0.1:8787/v1` | Magpie 插件连接反代的地址 |
 | `DUMATE_STATE_DIR` | `~/.config/dumate-proxy` | 元数据快照目录 |
 | `DUMATE_TIMEOUT_MS` | `120000` | 普通请求超时 |
 | `DUMATE_IMAGE_TIMEOUT_MS` | `180000` | 生图请求超时 |
@@ -74,7 +76,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   -d '{"model":"model-text","messages":[{"role":"user","content":"用一句话解释向量数据库"}]}'
 ```
 
-### 对话 endpoint 调生图模型
+### 通过 chat endpoint 调用生图模型
 
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
@@ -108,55 +110,37 @@ curl http://127.0.0.1:8787/v1/images/edits \
 
 ## DuMate 生图协议
 
-实测网关仍使用 `https://dumate-svc.baidu.com/gateway/apis/v1/chat/completions`，但生图模型要求 `prompt` 字段而不是 `messages`：
+网关使用 `https://dumate-svc.baidu.com/gateway/apis/v1/chat/completions`，生图模型要求 `prompt` 字段而不是 `messages`：
 
 ```json
 {"model":"dumate-image0.1","prompt":"a simple red circle"}
 ```
 
-网关会再转发到 `https://qianfan.baidubce.com/v2/images/generations`。账号若未开通对应生图模型权限，上游会返回 `invalid_model`；本反代会保留该错误并将其规范化为 OpenAI 错误响应。模型清单里有生图入口不代表账号一定具备调用权限。
-
-## 测试
-
-```bash
-npm test
-```
-
-## 致谢
-
-登录态解密、Cookie 域名过滤、gateway token 换取与推理档位规范化，参考了：
-
-- `RanceLee233/dumate-rance`（MIT）
-- `R227BOUT/magpie-dumate`（MIT）
-
-原始版权声明见 `LICENSE` 与 `NOTICE.md`。
-
+网关会再转发到 `https://qianfan.baidubce.com/v2/images/generations`。账号若未开通对应生图模型权限，上游会返回 `invalid_model`；本反代会保留该错误并规范化为 OpenAI 错误响应。模型清单里有生图入口不代表账号一定具备调用权限。
 
 ## 作为 Magpie provider plugin 使用
 
-项目根目录现在本身就是 Magpie 插件入口（`package.json` 的 `main` 指向 `magpie.mjs`）。先启动反代，再把本项目加入 Magpie：
+项目根目录本身就是 Magpie 插件入口（`package.json` 的 `main` 指向 `magpie.mjs`）。先启动反代，再把本项目加入 Magpie：
 
 ```bash
 magpie plugin add /absolute/path/to/dumate-plugin
 ```
 
-插件会自动读取反代侧的同一份账号模型清单，并向 Magpie 注册 OpenAI-compatible provider：
+插件会注册 OpenAI-compatible provider：
 
 - provider id：`dumate`
-- `npm`：`@ai-sdk/openai-compatible`
+- `npm`：
+  `@ai-sdk/openai-compatible`
 - `api` / `loader.baseURL`：`DUMATE_PROXY_URL`，默认 `http://127.0.0.1:8787/v1`
 - 登录方式：选择 “DuMate 本地反代”，插件只检查 `/healthz`，真正的 DuMate 登录态由反代进程管理
 
-### Magpie 模型识别规则
+### 模型识别
 
-- `config.provider.dumate.models` 是 map：key 是 Magpie 可见模型 id，value.id 是上游 API id。例如 `glm-5` 的 `id` 为 `model-text`。
-- Magpie 对 OpenAI-compatible 插件的生图识别信号是 `modalities.output: ["image"]` 且不含 `"text"`；插件里不需要额外 `type: image`。
-- `model-text`、`deepseek-v41-flash` 等 LLM 输出固定为 `["text"]`。
-- `dumate-image0.1` 输出固定为 `["image"]`，`tool_call:false`、`reasoning:false`、`attachment:false`。
+- `config.provider.dumate.models` 是 map：key 是 Magpie 可见模型 id，value.id 是上游 API id。
+- LLM 的 `modalities.output` 为 `["text"]`。
+- `dumate-image0.1` 的 `modalities.output` 为 `["image"]` 且不含 `"text"`，让 Magpie 将其识别为生图模型。
+- 生图模型固定 `tool_call:false`、`reasoning:false`、`attachment:false`。
 - `loader.fetch` 放行 `/models`、`/chat/completions`、`/images/generations`、`/images/edits` 及对应 `/v1/*` 路径；Proxy API key 只会发给反代 origin。
-
-完整调研与源码依据见 `docs/magpie-plugin-model-recognition.md`。
-
 
 ### 登录后保活
 
@@ -169,3 +153,15 @@ magpie plugin add /absolute/path/to/dumate-plugin
 - `/v1/keepalive` 强制刷新 DuMate gateway token，不返回 token 内容
 
 代理临时不可达时只让 Magpie 退避重试；代理明确报告 DuMate 登录态缺失时才把账号标记为需要重新登录。
+
+更多实现细节见 `docs/magpie-plugin-model-recognition.md`。
+
+## 测试
+
+```bash
+npm test
+```
+
+## 说明
+
+DuMate 是百度产品。本项目是独立本地反代实现，与百度无隶属或背书关系。
