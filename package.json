@@ -1,6 +1,6 @@
 {
   "name": "dumate-proxy",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "private": true,
   "description": "OpenAI-compatible DuMate reverse proxy with LLM and image-generation support",
   "type": "module",
@@ -16,7 +16,8 @@
     "NOTICE.md",
     "magpie.mjs",
     "icon.png",
-    "icon.svg"
+    "icon.svg",
+    "docs/image-generation.md"
   ],
   "scripts": {
     "start": "node bin/dumate-proxy.mjs",

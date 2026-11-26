@@ -201,6 +201,15 @@ test("generic console API errors do not mark the account expired", async () => {
 })
 
 
+test("config exposes every image model version", async () => {
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog })
+  const config = {}
+  plugin.config(config)
+  for (const id of ["dumate-image2.2", "dumate-image2.1", "dumate-image1.2", "dumate-image0.1"]) {
+    assert.ok(config.provider.dumate.models[id], id)
+    assert.deepEqual(config.provider.dumate.models[id].modalities.output, ["image"])
+  }
+})
 test("config exposes group/image as an image model", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
   const config = {}

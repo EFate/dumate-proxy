@@ -161,6 +161,8 @@ Magpie 插件本身只负责登录与官方网关请求，不要求填写本地�
 当前已验证的最强模型是 `dumate-image2.2`。如果百度后台后续上线 `dumate-image3.0` 或更高版本，插件会自动改用新模型；未知新版本默认复用 v3 工具端点。
 
 参考图不直接上传超长 data URL：先通过视觉模型把参考图转成结构化中文提示词，再调用生图接口。这样 `/images/edits` 不会再把请求错误地打到上游不支持的 `/apis/v1/images/edits`。
+完整生图调用教程见 [`docs/image-generation.md`](docs/image-generation.md)，包含文生图、参考图生成、chat endpoint 和错误排查。
+
 ### 额度与签到
 
 插件实现 Magpie 的 `auth.usage` 与 `auth.checkin` 钩子：
