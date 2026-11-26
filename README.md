@@ -153,6 +153,7 @@ Magpie 插件本身只负责登录与官方网关请求，不要求填写本地�
 
 浏览器与手动方式会通过 `https://console.bce.baidu.com/api/dumate/user/info` 验证 Cookie；成功后 Cookie 保存在 Magpie 账号记录中。桌面端账号在客户端重新登录后会由 `auth.refresh` 自动读取新 Cookie。
 
+多账号登录使用百度账号显示名作为账号标识，并把上游账号 ID 存到 `uid`；即使上游返回相同 `bceAccountId`，不同显示名也不会互相顶掉。只有登录页、302 跳转或明确的凭证失效信号才会把账号标记为需要重新登录。
 ### 额度与签到
 
 插件实现 Magpie 的 `auth.usage` 与 `auth.checkin` 钩子：

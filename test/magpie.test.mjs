@@ -81,7 +81,8 @@ test("browser and manual sign-in validate cookies against Baidu console", async 
   const seat = await browser.callback("bce-sessionid=abc; BDUSS=xyz")
   assert.equal(seat.type, "success")
   assert.equal(seat.source, "browser")
-  assert.equal(seat.accountId, "acct-1")
+  assert.equal(seat.accountId, "DuMate User")
+  assert.equal(seat.uid, "acct-1")
   assert.equal(seat.cookies.length, 2)
 
   const failed = await browser.callback("document.cookie=fake")
@@ -167,4 +168,34 @@ test("built-in catalog exposes the full DuMate model set", () => {
   assert.ok(full.imageModels.includes("dumate-image0.1"))
   assert.ok(full.models["deepseek-v41-flash"])
   assert.ok(full.models["kimi-k3"])
+})
+
+
+test("multiple accounts keep distinct identities", async () => {
+  const fetchImpl = async (url, init) => {
+    const header = String(init?.headers?.Cookie ?? init?.headers?.get?.("cookie") ?? "")
+    const name = header.includes("session-8") ? "EFate8" : "EFateNex"
+    return json({ code: 0, result: { bceAccountId: "same-upstream-id", displayName: name } })
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  assert.equal(plugin.auth.single, false)
+  const method = plugin.auth.methods[1]
+  const a = await (await method.authorize()).callback("bce-sessionid=session-8; BDUSS=x")
+  const b = await (await method.authorize()).callback("bce-sessionid=session-nex; BDUSS=y")
+  assert.notEqual(a.accountId, b.accountId)
+  assert.equal(a.accountId, "EFate8")
+  assert.equal(b.accountId, "EFateNex")
+  assert.equal(a.uid, b.uid)
+})
+
+test("generic console API errors do not mark the account expired", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("quota_overview")) return json({ code: 1, message: "login service temporarily unavailable" })
+    if (String(url).includes("loginBonusInfo")) return json({ code: 0, result: { hasIssued: true, totalTimes: 1 } })
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const result = await plugin.auth.usage(async () => ({ type: "oauth", cookies: [{ name: "bce-sessionid", value: "abc", domain: ".baidu.com" }] }))
+  assert.ok(result.error)
+  assert.equal(result.signIn, "kept")
 })
