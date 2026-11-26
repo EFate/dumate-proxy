@@ -154,6 +154,11 @@ Magpie 插件本身只负责登录与官方网关请求，不要求填写本地�
 浏览器与手动方式会通过 `https://console.bce.baidu.com/api/dumate/user/info` 验证 Cookie；成功后 Cookie 保存在 Magpie 账号记录中。桌面端账号在客户端重新登录后会由 `auth.refresh` 自动读取新 Cookie。
 
 多账号登录使用百度账号显示名作为账号标识，并把上游账号 ID 存到 `uid`；即使上游返回相同 `bceAccountId`，不同显示名也不会互相顶掉。只有登录页、302 跳转或明确的凭证失效信号才会把账号标记为需要重新登录。
+### 生图
+
+生图使用 DuMate 原生工具端点 `image_generate_v3/async`，提交任务后轮询取图；默认模型 `dumate-image2.2`，`group/image` 与旧 `dumate-image0.1` 都会归一到该可用模型。
+
+参考图不直接上传超长 data URL：先通过视觉模型把参考图转成结构化中文提示词，再调用文生图接口。这样 `/images/edits` 不会再把请求错误地打到上游不支持的 `/apis/v1/images/edits`。
 ### 额度与签到
 
 插件实现 Magpie 的 `auth.usage` 与 `auth.checkin` 钩子：

@@ -199,3 +199,36 @@ test("generic console API errors do not mark the account expired", async () => {
   assert.ok(result.error)
   assert.equal(result.signIn, "kept")
 })
+
+
+test("config exposes group/image as an image model", async () => {
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog })
+  const config = {}
+  plugin.config(config)
+  assert.ok(config.provider.dumate.models["group/image"])
+  assert.deepEqual(config.provider.dumate.models["group/image"].modalities.output, ["image"])
+})
+
+test("JSON image edits stay on the official chat route", async () => {
+  const calls = []
+  const fetchImpl = async (url, init) => {
+    calls.push(String(url))
+    if (String(url).includes("/api/dumate/app/token/get")) return json({ code: 0, result: { token: "edit-token", expired_at: new Date(Date.now() + 3600_000).toISOString() } })
+    if (String(url).includes(`${GATEWAY_BASE}/chat/completions`)) return json({ choices: [{ message: { content: "参考图描述：白发精灵少女，森林水流与阳光光束" } }] })
+    if (String(url).includes("/gateway/v2/tools/dumate/image_generate_v3/async")) {
+      if (init?.method === "POST") return json({ code: "0", task_id: "task-edit" })
+      return json({ code: "0", status: "success", imageUrls: ["https://cdn.example.com/edited.png"] })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const loader = await plugin.loader(async () => ({ type: "oauth", cookies: [{ name: "bce-sessionid", value: "abc", domain: ".baidu.com" }] }))
+  const response = await loader.fetch(`${GATEWAY_BASE}/images/edits`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "group/image", prompt: "参考这张图生成新图", image: "data:image/jpeg;base64,AAAA", size: "1024x1024", response_format: "url" }),
+  })
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).data[0].url, "https://cdn.example.com/edited.png")
+  assert.ok(!calls.some((url) => url.includes("/images/edits")))
+})
