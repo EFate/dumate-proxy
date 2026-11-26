@@ -1,3 +1,4 @@
+import { buildImagePayload, normalizeImageModel, selectStrongestImageModel } from "../src/media.mjs"
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
@@ -91,4 +92,18 @@ test("chat completion wraps generated images as markdown", () => {
     { model: "dumate-image0.1" },
   )
   assert.match(completion.choices[0].message.content, /!\[image-1\]\(https:\/\/cdn\.example\.com\/a\.png\)/)
+})
+
+test("image generation always selects the strongest available model", () => {
+  for (const model of ["dumate-image2.2", "dumate-image2.1", "dumate-image1.2", "dumate-image0.1", "group/image", undefined]) {
+    assert.equal(normalizeImageModel(model), "dumate-image2.2")
+    assert.equal(normalizeImageModel(model, ["dumate-image0.1", "dumate-image2.1"]), "dumate-image2.2")
+  }
+  assert.equal(selectStrongestImageModel(["dumate-image2.2", "dumate-image3.0"]), "dumate-image3.0")
+})
+
+test("unknown newer image models use the current strongest endpoint", () => {
+  const built = buildImagePayload({ prompt: "cat", model: "dumate-image3.0", availableModels: ["dumate-image3.0"] })
+  assert.equal(built.model, "dumate-image3.0")
+  assert.equal(built.path, "/v2/tools/dumate/image_generate_v3/async")
 })
