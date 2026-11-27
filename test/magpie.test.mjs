@@ -369,8 +369,8 @@ test("auth.import reads uploaded auth.json and key text files", async () => {
     throw new Error(`unexpected url ${url}`)
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
-  assert.ok(plugin.auth.importFrom.includes("auth.json"))
-  assert.ok(plugin.auth.importFroms.zh.includes("dumate-import.json"))
+  assert.ok(plugin.auth.importFrom.includes("export-dumate-auth.ps1"))
+  assert.ok(plugin.auth.importFroms.zh.includes("export-dumate-auth.ps1"))
 
   const seat = await plugin.auth.import([payload.cookieKey, payload.authJson])
   assert.equal(seat.type, "success")
