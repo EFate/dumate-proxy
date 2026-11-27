@@ -370,7 +370,7 @@ test("auth.import reads uploaded auth.json and key text files", async () => {
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
   assert.ok(plugin.auth.importFrom.includes("auth.json"))
-  assert.ok(plugin.auth.importFroms.zh.includes("分两次"))
+  assert.ok(plugin.auth.importFroms.zh.includes("dumate-import.json"))
 
   const seat = await plugin.auth.import([payload.cookieKey, payload.authJson])
   assert.equal(seat.type, "success")
@@ -434,4 +434,21 @@ test("upload button stays in Magpie and waits for two-file upload", async () => 
   assert.equal(seat.source, "uploaded-auth")
   assert.equal(seat.cookies[0].value, "uploaded-cookie")
   await plugin.auth.closeImportServer()
+})
+
+
+test("auth.import accepts a combined dumate-import.json file", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-combined", name: "EFateCombined", cookieValue: "combined-cookie" })
+  const fetchImpl = async (url, init) => {
+    if (String(url).includes("/api/dumate/user/info")) {
+      assert.ok(String(init?.headers?.Cookie ?? "").includes("bce-sessionid=combined-cookie"))
+      return json({ code: 0, result: { bceAccountId: "acct-combined", displayName: "EFateCombined" } })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const seat = await plugin.auth.import([JSON.stringify(payload)])
+  assert.equal(seat.type, "success")
+  assert.equal(seat.source, "imported-auth")
+  assert.equal(seat.cookies[0].value, "combined-cookie")
 })
