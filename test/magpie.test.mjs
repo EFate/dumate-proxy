@@ -59,12 +59,13 @@ test("plugin registers official gateway, not a local proxy", async () => {
   assert.deepEqual(config.provider.dumate.models["dumate-image2.2"].modalities.output, ["image"])
 })
 
-test("entry has the three reference login methods", async () => {
+test("entry has four login methods with file upload first", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
-  assert.equal(plugin.auth.methods.length, 3)
-  assert.ok(plugin.auth.methods[0].label.includes("桌面端"))
-  assert.ok(plugin.auth.methods[1].label.includes("浏览器"))
-  assert.ok(plugin.auth.methods[2].label.includes("手动粘贴"))
+  assert.equal(plugin.auth.methods.length, 4)
+  assert.ok(plugin.auth.methods[0].label.includes("上传两个文件"))
+  assert.ok(plugin.auth.methods[1].label.includes("桌面端"))
+  assert.ok(plugin.auth.methods[2].label.includes("浏览器"))
+  assert.ok(plugin.auth.methods[3].label.includes("手动粘贴"))
 })
 
 test("browser and manual sign-in validate cookies against Baidu console", async () => {
@@ -78,7 +79,7 @@ test("browser and manual sign-in validate cookies against Baidu console", async 
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
 
-  const browser = await plugin.auth.methods[1].authorize()
+  const browser = await plugin.auth.methods[2].authorize()
   assert.equal(browser.method, "code")
   assert.ok(browser.url.startsWith("https://login.bce.baidu.com/"))
   const seat = await browser.callback("bce-sessionid=abc; BDUSS=xyz")
@@ -182,7 +183,7 @@ test("multiple accounts keep distinct identities", async () => {
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
   assert.equal(plugin.auth.single, false)
-  const method = plugin.auth.methods[1]
+  const method = plugin.auth.methods[2]
   const a = await (await method.authorize()).callback("bce-sessionid=session-8; BDUSS=x")
   const b = await (await method.authorize()).callback("bce-sessionid=session-nex; BDUSS=y")
   assert.notEqual(a.accountId, b.accountId)
@@ -381,4 +382,48 @@ test("auth.import reads uploaded auth.json and key text files", async () => {
   const missingKey = await plugin.auth.import([payload.authJson])
   assert.equal(missingKey.type, "failed")
   assert.ok(missingKey.error.includes("cookie-key"))
+})
+
+
+test("upload sign-in receives auth.json and raw key from the browser page", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-upload", name: "EFateUpload", cookieValue: "uploaded-cookie" })
+  const fetchImpl = async (url, init) => {
+    if (String(url).includes("/api/dumate/user/info")) {
+      const cookie = String(init?.headers?.Cookie ?? "")
+      assert.ok(cookie.includes("bce-sessionid=uploaded-cookie"))
+      return json({ code: 0, result: { bceAccountId: "acct-upload", displayName: "EFateUpload" } })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({
+    config: { importBind: "127.0.0.1", importPort: 0 },
+    catalog,
+    fetchImpl,
+  })
+  const method = plugin.auth.methods[0]
+  assert.ok(method.label.includes("上传两个文件"))
+  const auth = await method.authorize()
+  assert.equal(auth.method, "auto")
+
+  const uploadUrl = new URL(auth.url)
+  const page = await fetch(auth.url)
+  assert.equal(page.status, 200)
+  assert.ok((await page.text()).includes("auth.json"))
+
+  const token = uploadUrl.searchParams.get("token")
+  assert.ok(token)
+  const uploaded = await fetch(`${uploadUrl.origin}/dumate-import/upload?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  assert.equal(uploaded.status, 200)
+
+  const seat = await auth.callback()
+  assert.equal(seat.type, "success")
+  assert.equal(seat.source, "uploaded-auth")
+  assert.equal(seat.accountId, "EFateUpload")
+  assert.equal(seat.uid, "acct-upload")
+  assert.equal(seat.cookies[0].value, "uploaded-cookie")
+  await plugin.auth.closeImportServer()
 })

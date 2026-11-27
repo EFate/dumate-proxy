@@ -18,25 +18,25 @@
 
 ### 登录方式
 
-Magpie 会显示三个登录入口：
+Magpie 会显示四个登录入口：
 
-1. **百度搭子桌面端登录态**：本机只读 `qianfan-desktop-app/auth.json` 与 `.cookie-key`
-2. **百度账号浏览器登录**：打开百度登录页，从 DevTools Network 复制完整 Cookie 请求头
-3. **手动粘贴 Cookie 字符串**：粘贴包含 `bce-sessionid` 的完整 Cookie 请求头
+1. **上传两个文件导入账号（auth.json + .cookie-key，服务器可用）**：Magpie 打开一个本地上传页，在页面里选 `auth.json` 和 `.cookie-key`，提交后插件自动完成登录
+2. **百度搭子桌面端登录态**：本机只读 `qianfan-desktop-app/auth.json` 与 `.cookie-key`
+3. **百度账号浏览器登录**：打开百度登录页，从 DevTools Network 复制完整 Cookie 请求头
+4. **手动粘贴 Cookie 字符串**：粘贴包含 `bce-sessionid` 的完整 Cookie 请求头
 
-服务器场景用 Magpie 的 **Import accounts from a file… / 从文件导入账号…** 入口，一次选两个文本文件：
+上传页直接读取 `.cookie-key` 二进制文件内容并转成 Base64，`auth.json` 按原文读取。文件上传到 Magpie 服务后由插件解密、验证并保存进 Magpie 账号记录，服务器侧不再需要常驻 `auth.json` 文件。
 
-1. `auth.json` 原文
-2. `.cookie-key` 的 Base64 文本，保存为 `.txt`
-
-Windows 本机生成第二个文件：
+Magpie 部署在服务器上时，需要让浏览器能访问插件启动的上传页：
 
 ```powershell
-$dir = Join-Path $env:APPDATA 'qianfan-desktop-app'
-certutil -encode (Join-Path $dir '.cookie-key') "$env:TEMP\cookie-key.txt"
+# Magpie 服务进程的环境变量
+$env:DUMATE_IMPORT_BIND = "0.0.0.0"
+$env:DUMATE_IMPORT_PORT = "8788"
+$env:DUMATE_IMPORT_PUBLIC_URL = "http://服务器地址:8788"
 ```
 
-插件会按文件内容识别两份输入，与选择顺序无关。原始 `.cookie-key` 是 32 字节二进制文件，Magpie 文件导入按文本读取；直接选原始文件会出现乱码，所以上传它的 Base64 文本。解密后的 Cookie 存在 Magpie 账号记录里，服务器侧不再需要 `auth.json` 文件。
+`DUMATE_IMPORT_BIND` 填 `0.0.0.0` 才会监听外网接口；`DUMATE_IMPORT_PUBLIC_URL` 填浏览器实际可访问的地址，可带路径前缀。默认只监听 `127.0.0.1:8788`，适合 Magpie 与本人在同一台机器的场景。
 
 浏览器和手动登录会先请求 `https://console.bce.baidu.com/api/dumate/user/info` 验证 Cookie。只有 302 登录跳转、HTML 登录页或明确凭证失效才会把账号标记为需要重新登录；普通接口错误不会误伤账号。
 
@@ -46,7 +46,7 @@ certutil -encode (Join-Path $dir '.cookie-key') "$env:TEMP\cookie-key.txt"
 
 - Magpie 插件把登录 Cookie 保存在 Magpie 自己的账号记录里；插件目录和本地反代状态目录不会保存 Magpie 账号 Cookie。
 - 桌面端登录源会在百度搭子 `auth.json` 的 Cookie 变化时自动同步，不需要重复粘贴。
-- 文件导入、浏览器登录 / 手动粘贴 Cookie 没有 refresh token；Cookie 过期后通常仍需重新登录。插件现在会在桌面端已登录相同账号（按 `bceAccountId` 匹配，缺失时按显示名匹配）时自动改用桌面端最新 Cookie，减少重复登录。
+- 文件上传、文件导入、浏览器登录 / 手动粘贴 Cookie 没有 refresh token；Cookie 过期后通常仍需重新登录。插件现在会在桌面端已登录相同账号（按 `bceAccountId` 匹配，缺失时按显示名匹配）时自动改用桌面端最新 Cookie，减少重复登录。
 - gateway token 是短期票据。缓存 token 被上游提前撤销时，插件会清缓存并重试一次；只有重试后仍 401 才把账号标记为需要重新登录。
 - 独立反代另走 `DUMATE_STATE_DIR/runtime-cookie.json`，可用 `/v1/keepalive` 刷新 gateway token；与 Magpie 账号记录互不相通。
 - 截图里的“会话保持”是 Magpie 的会话设置，不负责 DuMate 账号 Cookie 续期。

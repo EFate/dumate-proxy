@@ -1,6 +1,6 @@
 {
   "name": "dumate-proxy",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "private": true,
   "description": "OpenAI-compatible DuMate reverse proxy with LLM and image-generation support",
   "type": "module",
@@ -23,7 +23,7 @@
     "start": "node bin/dumate-proxy.mjs",
     "dev": "node --watch bin/dumate-proxy.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/config.mjs && node --check src/paths.mjs && node --check src/auth.mjs && node --check src/catalog.mjs && node --check src/gateway.mjs && node --check src/image.mjs && node --check src/server.mjs && node --check bin/dumate-proxy.mjs && node --check magpie.mjs"
+    "check": "node --check src/config.mjs && node --check src/paths.mjs && node --check src/auth.mjs && node --check src/catalog.mjs && node --check src/gateway.mjs && node --check src/image.mjs && node --check src/server.mjs && node --check src/import-server.mjs && node --check bin/dumate-proxy.mjs && node --check magpie.mjs"
   },
   "engines": {
     "node": ">=22"
