@@ -27,21 +27,34 @@ Magpie 会显示四个登录入口：
 
 上传页直接读取 `.cookie-key` 二进制文件内容并转成 Base64，`auth.json` 按原文读取。文件上传到 Magpie 服务后由插件解密、验证并保存进 Magpie 账号记录，服务器侧不再需要常驻 `auth.json` 文件。
 
-Magpie 原生导入窗口的文件选择器只接受 `.json` 和 `.txt`，原始 `.cookie-key` 没有 `.txt` 后缀时不会显示。先在本机生成可导入副本：
+Magpie 原生导入窗口的文件选择器只接受 `.json` 和 `.txt`，原始 `.cookie-key` 没有 `.txt` 后缀时不会显示。先在本机运行一键导出脚本，生成可导入副本：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\export-dumate-auth.ps1
+powershell -ExecutionPolicy Bypass -File D:\BrowserDownloads\MyGIT\dumate-proxy\tools\export-dumate-auth.ps1 -OutDir D:\BrowserDownloads\dumate-import
 ```
 
-脚本会在当前目录生成 `dumate-import` 文件夹，里面有三个文件：
+脚本会在 `D:\BrowserDownloads\dumate-import` 生成三个文件：
 
 ```text
-auth.json
-cookie-key.txt
-dumate-import.json
+D:\BrowserDownloads\dumate-import\auth.json
+D:\BrowserDownloads\dumate-import\cookie-key.txt
+D:\BrowserDownloads\dumate-import\dumate-import.json
 ```
 
-在导入窗口选 `auth.json` 和 `cookie-key.txt`，或只选 `dumate-import.json`。导入窗口每次选择会替换上次选择时，分两次选即可：先选 `auth.json`，提示收到后再选 `cookie-key.txt`，插件会合并两份内容完成登录。
+在 Magpie 的“从文件导入账号…”里选：
+
+```text
+D:\BrowserDownloads\dumate-import\auth.json
+D:\BrowserDownloads\dumate-import\cookie-key.txt
+```
+
+也可以只选一个文件：
+
+```text
+D:\BrowserDownloads\dumate-import\dumate-import.json
+```
+
+导入窗口每次选择会替换上次选择时，分两次选即可：先选 `auth.json`，提示收到后再选 `cookie-key.txt`，插件会合并两份内容完成登录。
 
 Magpie 部署在服务器上时，上传页需要让浏览器访问：
 
