@@ -59,12 +59,13 @@ test("plugin registers official gateway, not a local proxy", async () => {
   assert.deepEqual(config.provider.dumate.models["dumate-image2.2"].modalities.output, ["image"])
 })
 
-test("entry has the three reference login methods", async () => {
+test("entry has the four login methods", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
-  assert.equal(plugin.auth.methods.length, 3)
+  assert.equal(plugin.auth.methods.length, 4)
   assert.ok(plugin.auth.methods[0].label.includes("桌面端"))
-  assert.ok(plugin.auth.methods[1].label.includes("浏览器"))
-  assert.ok(plugin.auth.methods[2].label.includes("手动粘贴"))
+  assert.ok(plugin.auth.methods[1].label.includes("auth.json"))
+  assert.ok(plugin.auth.methods[2].label.includes("浏览器"))
+  assert.ok(plugin.auth.methods[3].label.includes("手动粘贴"))
 })
 
 test("browser and manual sign-in validate cookies against Baidu console", async () => {
@@ -78,7 +79,7 @@ test("browser and manual sign-in validate cookies against Baidu console", async 
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
 
-  const browser = await plugin.auth.methods[1].authorize()
+  const browser = await plugin.auth.methods[2].authorize()
   assert.equal(browser.method, "code")
   assert.ok(browser.url.startsWith("https://login.bce.baidu.com/"))
   const seat = await browser.callback("bce-sessionid=abc; BDUSS=xyz")
@@ -182,7 +183,7 @@ test("multiple accounts keep distinct identities", async () => {
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
   assert.equal(plugin.auth.single, false)
-  const method = plugin.auth.methods[1]
+  const method = plugin.auth.methods[2]
   const a = await (await method.authorize()).callback("bce-sessionid=session-8; BDUSS=x")
   const b = await (await method.authorize()).callback("bce-sessionid=session-nex; BDUSS=y")
   assert.notEqual(a.accountId, b.accountId)
@@ -246,20 +247,28 @@ test("JSON image edits stay on the official chat route", async () => {
 })
 
 
-function makeDesktopLoginDir({ accountId, name, cookieValue }) {
-  const dir = mkdtempSync(join(tmpdir(), "dumate-refresh-"))
+function makeDesktopAuthPayload({ accountId, name, cookieValue }) {
   const key = randomBytes(32)
   const iv = randomBytes(12)
   const cipher = createCipheriv("aes-256-gcm", key, iv)
   const cookies = [{ name: "bce-sessionid", value: cookieValue, domain: ".baidu.com" }]
   const encrypted = Buffer.concat([cipher.update(JSON.stringify(cookies), "utf8"), cipher.final()])
   const envelope = Buffer.concat([iv, cipher.getAuthTag(), encrypted])
-  writeFileSync(join(dir, ".cookie-key"), key)
-  writeFileSync(join(dir, "auth.json"), JSON.stringify({
-    cookies: envelope.toString("base64"),
-    activeProfileId: "p1",
-    accountProfiles: [{ profileId: "p1", bceAccountId: accountId, displayName: name }],
-  }))
+  return {
+    authJson: JSON.stringify({
+      cookies: envelope.toString("base64"),
+      activeProfileId: "p1",
+      accountProfiles: [{ profileId: "p1", bceAccountId: accountId, displayName: name }],
+    }),
+    cookieKey: key.toString("base64"),
+  }
+}
+
+function makeDesktopLoginDir({ accountId, name, cookieValue }) {
+  const dir = mkdtempSync(join(tmpdir(), "dumate-refresh-"))
+  const payload = makeDesktopAuthPayload({ accountId, name, cookieValue })
+  writeFileSync(join(dir, ".cookie-key"), Buffer.from(payload.cookieKey, "base64"))
+  writeFileSync(join(dir, "auth.json"), payload.authJson)
   return dir
 }
 
@@ -346,4 +355,31 @@ test("browser seats adopt the desktop login when the same account is active", as
     cookies: [{ name: "bce-sessionid", value: "old-cookie", domain: ".baidu.com" }],
   })
   assert.equal(other, undefined)
+})
+
+
+test("pasted auth.json login decrypts cookies and validates them", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-pasted", name: "EFatePasted", cookieValue: "pasted-auth-cookie" })
+  const fetchImpl = async (url, init) => {
+    if (String(url).includes("/api/dumate/user/info")) {
+      const cookie = String(init?.headers?.Cookie ?? "")
+      assert.ok(cookie.includes("bce-sessionid=pasted-auth-cookie"))
+      return json({ code: 0, result: { bceAccountId: "acct-pasted", displayName: "EFatePasted" } })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const method = plugin.auth.methods[1]
+  assert.ok(method.label.includes("auth.json"))
+  assert.equal(method.prompts.length, 2)
+  assert.equal(method.prompts[0].validate("not json"), "auth.json 不是合法 JSON")
+  assert.equal(method.prompts[0].validate('{"cookies":""}'), "auth.json 缺少 cookies 字段")
+  assert.ok(method.prompts[1].validate("short"))
+
+  const seat = await method.authorize(payload)
+  assert.equal(seat.type, "success")
+  assert.equal(seat.source, "pasted-auth")
+  assert.equal(seat.accountId, "EFatePasted")
+  assert.equal(seat.uid, "acct-pasted")
+  assert.equal(seat.cookies[0].value, "pasted-auth-cookie")
 })
