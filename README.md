@@ -33,12 +33,11 @@ Magpie 会显示三个登录入口：
 插件会枚举全部模型，不做单一聚合：
 
 - 对话模型：`model-text`、`deepseek-v41-flash`、`glm-53-flash`、`kimi-k3`、`qwen3.8-max` 等
-- 生图模型：`dumate-image2.2`、`dumate-image2.1`、`dumate-image1.2`、`dumate-image0.1`
-- 兼容别名：`group/image`
+- 生图模型：只显示一个统一模型 `dumate-image2.2`
 
 LLM 的 `modalities.output` 为 `["text"]`，生图模型为 `["image"]`，便于 Magpie 正确识别。
 
-生图调用始终选择当前最强模型：插件合并 DuMate 当前模型清单与内置版本表，按版本号取最高 `dumate-image*`。当前最强是 `dumate-image2.2`；百度后台上线更高版本后会自动切换，未知新版本复用 v3 工具端点。
+插件只向 Magpie 暴露一个生图模型名 `dumate-image2.2`；实际生图调用始终选择当前最强模型。插件合并 DuMate 当前模型清单与内置版本表，按版本号取最高 `dumate-image*`；旧别名和其它版本不会出现在模型列表，但请求仍会归一到最强模型。百度后台上线更高版本后会自动切换，未知新版本复用 v3 工具端点。
 
 ### 额度与签到
 
@@ -84,7 +83,7 @@ $base='http://123.60.6.205:8890/v1'
 curl.exe -X POST "$base/images/generations" `
   -H "Authorization: Bearer $env:MAGPIE_KEY" `
   -H 'Content-Type: application/json' `
-  --data '{"model":"group/image","prompt":"白发精灵少女站在森林水流中，阳光穿过树叶，动漫插画","n":1,"size":"1024x1024","response_format":"url"}'
+  --data '{"model":"dumate-image2.2","prompt":"白发精灵少女站在森林水流中，阳光穿过树叶，动漫插画","n":1,"size":"1024x1024","response_format":"url"}'
 ```
 
 参考图生成：
@@ -94,7 +93,7 @@ $ref='C:\path\to\reference.jpg'
 
 curl.exe -X POST "$base/images/edits" `
   -H "Authorization: Bearer $env:MAGPIE_KEY" `
-  -F 'model=group/image' `
+  -F 'model=dumate-image2.2' `
   -F 'prompt=保留参考图的白发精灵少女、白色连衣裙、森林水流与阳光光束，生成一张新的动漫插画' `
   -F 'n=1' `
   -F 'size=1024x1024' `

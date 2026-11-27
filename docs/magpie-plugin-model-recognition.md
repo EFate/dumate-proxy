@@ -13,14 +13,13 @@
 插件枚举全部可用模型，不做单一聚合：
 
 - 对话：`model-text`、`deepseek-v41-flash`、`glm-53-flash`、`kimi-k3`、`qwen3.8-max` 等
-- 生图：`dumate-image2.2`、`dumate-image2.1`、`dumate-image1.2`、`dumate-image0.1`
-- 兼容别名：`group/image`
+- 生图：只显示一个统一模型 `dumate-image2.2`
 
 模型元数据优先来自当前 DuMate 账号配置；缺失时使用内置完整清单。
 
 ## 生图模型选择
 
-生图调用按版本号选择最强模型：插件合并 DuMate 当前模型清单与内置版本表，取最高的 `dumate-image*`。当前基线是 `dumate-image2.2`；后台上线更高版本后自动切换，未知新版本复用 v3 工具端点。
+插件只向 Magpie 暴露一个生图模型名 `dumate-image2.2`；实际生图调用按版本号选择最强模型：合并 DuMate 当前模型清单与内置版本表，取最高的 `dumate-image*`。当前基线是 `dumate-image2.2`；后台上线更高版本后自动切换，未知新版本复用 v3 工具端点。
 
 生图请求走 DuMate 原生工具端点：
 

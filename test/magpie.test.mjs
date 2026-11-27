@@ -42,8 +42,8 @@ test("catalog normalizes image output modalities for Magpie", () => {
 
 test("Magpie model map exposes text and image modalities", () => {
   const models = _internal.toMagpieModels(catalog)
-  assert.deepEqual(models["dumate-image0.1"].modalities.output, ["image"])
-  assert.equal(models["dumate-image0.1"].modalities.output.includes("text"), false)
+  assert.deepEqual(models["dumate-image2.2"].modalities.output, ["image"])
+  assert.equal(models["dumate-image2.2"].modalities.output.includes("text"), false)
   assert.deepEqual(models["model-text"].modalities.output, ["text"])
 })
 
@@ -53,7 +53,7 @@ test("plugin registers official gateway, not a local proxy", async () => {
   plugin.config(config)
   assert.equal(config.provider.dumate.api, GATEWAY_BASE)
   assert.ok(config.provider.dumate.models["model-text"])
-  assert.deepEqual(config.provider.dumate.models["dumate-image0.1"].modalities.output, ["image"])
+  assert.deepEqual(config.provider.dumate.models["dumate-image2.2"].modalities.output, ["image"])
 })
 
 test("entry has the three reference login methods", async () => {
@@ -201,21 +201,21 @@ test("generic console API errors do not mark the account expired", async () => {
 })
 
 
-test("config exposes every image model version", async () => {
+test("config exposes exactly one strongest image model", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
   const config = {}
   plugin.config(config)
-  for (const id of ["dumate-image2.2", "dumate-image2.1", "dumate-image1.2", "dumate-image0.1"]) {
-    assert.ok(config.provider.dumate.models[id], id)
-    assert.deepEqual(config.provider.dumate.models[id].modalities.output, ["image"])
-  }
+  const imageIds = Object.entries(config.provider.dumate.models)
+    .filter(([id, model]) => model.modalities?.output?.includes("image") || /^dumate-image/i.test(id))
+    .map(([id]) => id)
+  assert.deepEqual(imageIds, ["dumate-image2.2"])
+  assert.equal(config.provider.dumate.models["dumate-image2.2"].modalities.output.includes("text"), false)
 })
-test("config exposes group/image as an image model", async () => {
+test("group/image compatibility alias is not advertised as a second model", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
   const config = {}
   plugin.config(config)
-  assert.ok(config.provider.dumate.models["group/image"])
-  assert.deepEqual(config.provider.dumate.models["group/image"].modalities.output, ["image"])
+  assert.equal(config.provider.dumate.models["group/image"], undefined)
 })
 
 test("JSON image edits stay on the official chat route", async () => {
