@@ -59,13 +59,12 @@ test("plugin registers official gateway, not a local proxy", async () => {
   assert.deepEqual(config.provider.dumate.models["dumate-image2.2"].modalities.output, ["image"])
 })
 
-test("entry has the four login methods", async () => {
+test("entry has the three reference login methods", async () => {
   const plugin = await DuMateProxyPlugin({ config: {}, catalog })
-  assert.equal(plugin.auth.methods.length, 4)
+  assert.equal(plugin.auth.methods.length, 3)
   assert.ok(plugin.auth.methods[0].label.includes("桌面端"))
-  assert.ok(plugin.auth.methods[1].label.includes("auth.json"))
-  assert.ok(plugin.auth.methods[2].label.includes("浏览器"))
-  assert.ok(plugin.auth.methods[3].label.includes("手动粘贴"))
+  assert.ok(plugin.auth.methods[1].label.includes("浏览器"))
+  assert.ok(plugin.auth.methods[2].label.includes("手动粘贴"))
 })
 
 test("browser and manual sign-in validate cookies against Baidu console", async () => {
@@ -79,7 +78,7 @@ test("browser and manual sign-in validate cookies against Baidu console", async 
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
 
-  const browser = await plugin.auth.methods[2].authorize()
+  const browser = await plugin.auth.methods[1].authorize()
   assert.equal(browser.method, "code")
   assert.ok(browser.url.startsWith("https://login.bce.baidu.com/"))
   const seat = await browser.callback("bce-sessionid=abc; BDUSS=xyz")
@@ -183,7 +182,7 @@ test("multiple accounts keep distinct identities", async () => {
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
   assert.equal(plugin.auth.single, false)
-  const method = plugin.auth.methods[2]
+  const method = plugin.auth.methods[1]
   const a = await (await method.authorize()).callback("bce-sessionid=session-8; BDUSS=x")
   const b = await (await method.authorize()).callback("bce-sessionid=session-nex; BDUSS=y")
   assert.notEqual(a.accountId, b.accountId)
@@ -358,28 +357,28 @@ test("browser seats adopt the desktop login when the same account is active", as
 })
 
 
-test("pasted auth.json login decrypts cookies and validates them", async () => {
-  const payload = makeDesktopAuthPayload({ accountId: "acct-pasted", name: "EFatePasted", cookieValue: "pasted-auth-cookie" })
+test("auth.import reads uploaded auth.json and key text files", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-import", name: "EFateImport", cookieValue: "imported-auth-cookie" })
   const fetchImpl = async (url, init) => {
     if (String(url).includes("/api/dumate/user/info")) {
       const cookie = String(init?.headers?.Cookie ?? "")
-      assert.ok(cookie.includes("bce-sessionid=pasted-auth-cookie"))
-      return json({ code: 0, result: { bceAccountId: "acct-pasted", displayName: "EFatePasted" } })
+      assert.ok(cookie.includes("bce-sessionid=imported-auth-cookie"))
+      return json({ code: 0, result: { bceAccountId: "acct-import", displayName: "EFateImport" } })
     }
     throw new Error(`unexpected url ${url}`)
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
-  const method = plugin.auth.methods[1]
-  assert.ok(method.label.includes("auth.json"))
-  assert.equal(method.prompts.length, 2)
-  assert.equal(method.prompts[0].validate("not json"), "auth.json 不是合法 JSON")
-  assert.equal(method.prompts[0].validate('{"cookies":""}'), "auth.json 缺少 cookies 字段")
-  assert.ok(method.prompts[1].validate("short"))
+  assert.ok(plugin.auth.importFrom.includes("auth.json"))
+  assert.ok(plugin.auth.importFroms.zh.includes("两个文件"))
 
-  const seat = await method.authorize(payload)
+  const seat = await plugin.auth.import([payload.cookieKey, payload.authJson])
   assert.equal(seat.type, "success")
-  assert.equal(seat.source, "pasted-auth")
-  assert.equal(seat.accountId, "EFatePasted")
-  assert.equal(seat.uid, "acct-pasted")
-  assert.equal(seat.cookies[0].value, "pasted-auth-cookie")
+  assert.equal(seat.source, "imported-auth")
+  assert.equal(seat.accountId, "EFateImport")
+  assert.equal(seat.uid, "acct-import")
+  assert.equal(seat.cookies[0].value, "imported-auth-cookie")
+
+  const missingKey = await plugin.auth.import([payload.authJson])
+  assert.equal(missingKey.type, "failed")
+  assert.ok(missingKey.error.includes("cookie-key"))
 })
