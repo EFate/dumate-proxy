@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createCipheriv, randomBytes } from "node:crypto"
-import { buildCookieHeader, extractCsrfToken, parseCookieString, readDesktopLogin, DuMateAuth } from "../src/auth.mjs"
+import { buildCookieHeader, extractCsrfToken, parseCookieKey, parseCookieString, readDesktopLogin, DuMateAuth } from "../src/auth.mjs"
 
 test("cookie header follows DuMate domain filtering and quoting", () => {
   const cookies = [
@@ -85,4 +85,12 @@ test("runtime cookie survives a new DuMateAuth instance", async () => {
   await first.setCookie("bce-sessionid=abc; BDUSS=xyz", "manual")
   const second = new DuMateAuth(config)
   assert.equal(await second.cookieHeader(), "bce-sessionid=abc; BDUSS=xyz")
+})
+
+test("pasteable cookie key accepts certutil base64 text", () => {
+  const key = randomBytes(32)
+  const body = key.toString("base64").match(/.{1,64}/g).join("\n")
+  const wrapped = `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`
+  assert.deepEqual(parseCookieKey(wrapped), key)
+  assert.deepEqual(parseCookieKey(key.toString("hex")), key)
 })

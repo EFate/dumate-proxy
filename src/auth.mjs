@@ -64,7 +64,7 @@ export function parseCookieKey(raw) {
     }
   }
 
-  const clean = text.replace(/-----(BEGIN|END)[^-]*-----/g, "").replace(/s+/g, "")
+  const clean = text.replace(/-----(BEGIN|END)[^-]*-----/g, "").replace(/\s+/g, "")
   if (/^[0-9a-fA-F]{64}$/.test(clean)) return Buffer.from(clean, "hex")
   if (/^[A-Za-z0-9+/=]+$/.test(clean)) {
     const decoded = Buffer.from(clean, "base64")
