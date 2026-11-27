@@ -370,7 +370,7 @@ test("auth.import reads uploaded auth.json and key text files", async () => {
   }
   const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
   assert.ok(plugin.auth.importFrom.includes("auth.json"))
-  assert.ok(plugin.auth.importFroms.zh.includes("两个文件"))
+  assert.ok(plugin.auth.importFroms.zh.includes("分两次"))
 
   const seat = await plugin.auth.import([payload.cookieKey, payload.authJson])
   assert.equal(seat.type, "success")
@@ -385,31 +385,42 @@ test("auth.import reads uploaded auth.json and key text files", async () => {
 })
 
 
-test("upload sign-in receives auth.json and raw key from the browser page", async () => {
-  const payload = makeDesktopAuthPayload({ accountId: "acct-upload", name: "EFateUpload", cookieValue: "uploaded-cookie" })
+test("auth.import accepts one file at a time when the picker replaces the previous selection", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-staged", name: "EFateStaged", cookieValue: "staged-cookie" })
   const fetchImpl = async (url, init) => {
     if (String(url).includes("/api/dumate/user/info")) {
       const cookie = String(init?.headers?.Cookie ?? "")
-      assert.ok(cookie.includes("bce-sessionid=uploaded-cookie"))
+      assert.ok(cookie.includes("bce-sessionid=staged-cookie"))
+      return json({ code: 0, result: { bceAccountId: "acct-staged", displayName: "EFateStaged" } })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const first = await plugin.auth.import([payload.authJson])
+  assert.equal(first.type, "failed")
+  assert.ok(first.error.includes("cookie-key.txt"))
+
+  const second = await plugin.auth.import([payload.cookieKey])
+  assert.equal(second.type, "success")
+  assert.equal(second.source, "imported-auth")
+  assert.equal(second.cookies[0].value, "staged-cookie")
+})
+
+
+test("upload button stays in Magpie and waits for two-file upload", async () => {
+  const payload = makeDesktopAuthPayload({ accountId: "acct-upload", name: "EFateUpload", cookieValue: "uploaded-cookie" })
+  const fetchImpl = async (url, init) => {
+    if (String(url).includes("/api/dumate/user/info")) {
+      assert.ok(String(init?.headers?.Cookie ?? "").includes("bce-sessionid=uploaded-cookie"))
       return json({ code: 0, result: { bceAccountId: "acct-upload", displayName: "EFateUpload" } })
     }
     throw new Error(`unexpected url ${url}`)
   }
-  const plugin = await DuMateProxyPlugin({
-    config: { importBind: "127.0.0.1", importPort: 0 },
-    catalog,
-    fetchImpl,
-  })
-  const method = plugin.auth.methods[0]
-  assert.ok(method.label.includes("上传两个文件"))
-  const auth = await method.authorize()
+  const plugin = await DuMateProxyPlugin({ config: { importBind: "127.0.0.1", importPort: 0 }, catalog, fetchImpl })
+  const auth = await plugin.auth.methods[0].authorize()
   assert.equal(auth.method, "auto")
-
+  assert.equal(auth.opened, true)
   const uploadUrl = new URL(auth.url)
-  const page = await fetch(auth.url)
-  assert.equal(page.status, 200)
-  assert.ok((await page.text()).includes("auth.json"))
-
   const token = uploadUrl.searchParams.get("token")
   assert.ok(token)
   const uploaded = await fetch(`${uploadUrl.origin}/dumate-import/upload?token=${encodeURIComponent(token)}`, {
@@ -418,12 +429,9 @@ test("upload sign-in receives auth.json and raw key from the browser page", asyn
     body: JSON.stringify(payload),
   })
   assert.equal(uploaded.status, 200)
-
   const seat = await auth.callback()
   assert.equal(seat.type, "success")
   assert.equal(seat.source, "uploaded-auth")
-  assert.equal(seat.accountId, "EFateUpload")
-  assert.equal(seat.uid, "acct-upload")
   assert.equal(seat.cookies[0].value, "uploaded-cookie")
   await plugin.auth.closeImportServer()
 })

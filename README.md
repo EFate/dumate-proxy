@@ -20,14 +20,16 @@
 
 Magpie 会显示四个登录入口：
 
-1. **上传两个文件导入账号（auth.json + .cookie-key，服务器可用）**：Magpie 打开一个本地上传页，在页面里选 `auth.json` 和 `.cookie-key`，提交后插件自动完成登录
+1. **上传两个文件导入账号（auth.json + .cookie-key）**：额外按钮，点击后停在 Magpie 页面，页面里显示上传链接；点开链接后可选 `auth.json` 和 `.cookie-key` 两个文件，提交后自动完成登录
 2. **百度搭子桌面端登录态**：本机只读 `qianfan-desktop-app/auth.json` 与 `.cookie-key`
 3. **百度账号浏览器登录**：打开百度登录页，从 DevTools Network 复制完整 Cookie 请求头
 4. **手动粘贴 Cookie 字符串**：粘贴包含 `bce-sessionid` 的完整 Cookie 请求头
 
 上传页直接读取 `.cookie-key` 二进制文件内容并转成 Base64，`auth.json` 按原文读取。文件上传到 Magpie 服务后由插件解密、验证并保存进 Magpie 账号记录，服务器侧不再需要常驻 `auth.json` 文件。
 
-Magpie 部署在服务器上时，需要让浏览器能访问插件启动的上传页：
+Magpie 原生的 **Import accounts from a file… / 从文件导入账号…** 也支持两个文件。导入窗口每次选择会替换上次选择时，分两次即可：先选 `auth.json`，提示收到后再选 `cookie-key.txt`，插件会合并两份内容完成登录；两个文件一次选完也可以。
+
+Magpie 部署在服务器上时，上传页需要让浏览器访问：
 
 ```powershell
 # Magpie 服务进程的环境变量
