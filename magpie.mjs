@@ -137,10 +137,14 @@ async function gatewayToken(cookieStr, fetchImpl) {
   return next.token
 }
 
+function isSignInResponse(response) {
+  return (response.status >= 300 && response.status < 400) || response.status === 401
+}
+
 async function gatewayFetch(body, cookies, fetchImpl, signal) {
   const header = cookieHeaderOf(cookies)
-  const token = await gatewayToken(header, fetchImpl)
-  const response = await fetchImpl(`${GATEWAY_BASE}/chat/completions`, {
+  let token = await gatewayToken(header, fetchImpl)
+  const send = () => fetchImpl(`${GATEWAY_BASE}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -152,7 +156,15 @@ async function gatewayFetch(body, cookies, fetchImpl, signal) {
     redirect: "manual",
     signal: signal ?? AbortSignal.timeout(180_000),
   })
-  if ((response.status >= 300 && response.status < 400) || response.status === 401) {
+  let response = await send()
+  if (isSignInResponse(response)) {
+    // A cached gateway token can be revoked before its local TTL. Clear it and
+    // retry once with a fresh token before treating the whole account as signed out.
+    tokenCache.delete(header)
+    token = await gatewayToken(header, fetchImpl)
+    response = await send()
+  }
+  if (isSignInResponse(response)) {
     tokenCache.delete(header)
     throw signInError()
   }
@@ -308,9 +320,24 @@ export const DuMateProxyPlugin = async (input = {}) => {
       single: false,
       icon: ICON,
       async refresh(auth) {
-        if (auth?.source !== "desktop") return undefined
         const current = readDesktopLogin({ userDataDir: config.userDataDir })
         if (!current) return undefined
+
+        if (auth?.source === "desktop") {
+          if (cookieHeaderOf(current.cookies) === cookieHeaderOf(auth.cookies)) return undefined
+          return seat(current.cookies, "desktop", current)
+        }
+
+        // Browser/manual seats have no OAuth refresh token. If the desktop
+        // app is logged into the same account, adopt its current cookie set
+        // instead of forcing the user to paste cookies again.
+        const currentUid = String(current.uid || current.accountId || "")
+        const authUid = String(auth?.uid || "")
+        const sameAccount = currentUid && authUid
+          ? currentUid === authUid
+          : [current.accountId, current.name].filter(Boolean).some((name) =>
+              [auth?.accountId, auth?.name].filter(Boolean).includes(name))
+        if (!sameAccount) return undefined
         if (cookieHeaderOf(current.cookies) === cookieHeaderOf(auth.cookies)) return undefined
         return seat(current.cookies, "desktop", current)
       },
@@ -482,7 +509,7 @@ export const DuMateProxyPlugin = async (input = {}) => {
       }
       const cookies = auth.cookies
       const consoleHostname = new URL(CONSOLE_BASE).hostname
-      const json = (status, value) => jsonResponse(status, value)
+      const json = (status, value, extraHeaders) => jsonResponse(status, value, extraHeaders)
 
       return {
         baseURL: GATEWAY_BASE,

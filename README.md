@@ -28,6 +28,15 @@ Magpie 会显示三个登录入口：
 
 多个账号使用百度账号显示名作为 `accountId`，上游 `bceAccountId` 存到 `uid`，因此同名上游 ID 的不同账号不会互相顶掉。
 
+### 登录持久化与自动刷新
+
+- Magpie 插件把登录 Cookie 保存在 Magpie 自己的账号记录里；插件目录和本地反代状态目录不会保存 Magpie 账号 Cookie。
+- 桌面端登录源会在百度搭子 `auth.json` 的 Cookie 变化时自动同步，不需要重复粘贴。
+- 浏览器登录 / 手动粘贴 Cookie 没有 refresh token；Cookie 过期后通常仍需重新登录。插件现在会在桌面端已登录相同账号（按 `bceAccountId` 匹配，缺失时按显示名匹配）时自动改用桌面端最新 Cookie，减少重复登录。
+- gateway token 是短期票据。缓存 token 被上游提前撤销时，插件会清缓存并重试一次；只有重试后仍 401 才把账号标记为需要重新登录。
+- 独立反代另走 `DUMATE_STATE_DIR/runtime-cookie.json`，可用 `/v1/keepalive` 刷新 gateway token；与 Magpie 账号记录互不相通。
+- 截图里的“会话保持”是 Magpie 的会话设置，不负责 DuMate 账号 Cookie 续期。
+
 ### 模型清单
 
 插件会枚举全部模型，不做单一聚合：

@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs"
+import { createCipheriv, randomBytes } from "node:crypto"
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { importCatalog } from "../src/catalog.mjs"
@@ -240,4 +243,107 @@ test("JSON image edits stay on the official chat route", async () => {
   assert.equal(response.status, 200)
   assert.equal((await response.json()).data[0].url, "https://cdn.example.com/edited.png")
   assert.ok(!calls.some((url) => url.includes("/images/edits")))
+})
+
+
+function makeDesktopLoginDir({ accountId, name, cookieValue }) {
+  const dir = mkdtempSync(join(tmpdir(), "dumate-refresh-"))
+  const key = randomBytes(32)
+  const iv = randomBytes(12)
+  const cipher = createCipheriv("aes-256-gcm", key, iv)
+  const cookies = [{ name: "bce-sessionid", value: cookieValue, domain: ".baidu.com" }]
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(cookies), "utf8"), cipher.final()])
+  const envelope = Buffer.concat([iv, cipher.getAuthTag(), encrypted])
+  writeFileSync(join(dir, ".cookie-key"), key)
+  writeFileSync(join(dir, "auth.json"), JSON.stringify({
+    cookies: envelope.toString("base64"),
+    activeProfileId: "p1",
+    accountProfiles: [{ profileId: "p1", bceAccountId: accountId, displayName: name }],
+  }))
+  return dir
+}
+
+test("stale gateway token refreshes once before the account is marked expired", async () => {
+  let tokenCalls = 0
+  let gatewayCalls = 0
+  const fetchImpl = async (url, init) => {
+    if (String(url).includes("/api/dumate/app/token/get")) {
+      tokenCalls++
+      return json({ code: 0, result: { token: `token-${tokenCalls}`, expired_at: new Date(Date.now() + 3600_000).toISOString() } })
+    }
+    if (String(url).includes(`${GATEWAY_BASE}/chat/completions`)) {
+      gatewayCalls++
+      assert.equal(String(init?.headers?.Authorization), `Bearer token-${gatewayCalls}`)
+      if (gatewayCalls === 1) return json({ error: { message: "stale token" } }, 401)
+      return json({ id: "chat-ok", model: "model-text", choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }] })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const loader = await plugin.loader(async () => ({
+    type: "oauth",
+    cookies: [{ name: "bce-sessionid", value: "stale-token-retry", domain: ".baidu.com" }],
+  }))
+  const response = await loader.fetch(`${GATEWAY_BASE}/chat/completions`, {
+    method: "POST",
+    body: JSON.stringify({ model: "model-text", messages: [] }),
+  })
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).choices[0].message.content, "ok")
+  assert.equal(tokenCalls, 2)
+  assert.equal(gatewayCalls, 2)
+})
+
+test("repeated gateway 401 still marks the account expired", async () => {
+  let tokenCalls = 0
+  let gatewayCalls = 0
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/api/dumate/app/token/get")) {
+      tokenCalls++
+      return json({ code: 0, result: { token: `token-${tokenCalls}`, expired_at: new Date(Date.now() + 3600_000).toISOString() } })
+    }
+    if (String(url).includes(`${GATEWAY_BASE}/chat/completions`)) {
+      gatewayCalls++
+      return json({ error: { message: "still unauthorized" } }, 401)
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+  const plugin = await DuMateProxyPlugin({ config: {}, catalog, fetchImpl })
+  const loader = await plugin.loader(async () => ({
+    type: "oauth",
+    cookies: [{ name: "bce-sessionid", value: "stale-token-expired", domain: ".baidu.com" }],
+  }))
+  const response = await loader.fetch(`${GATEWAY_BASE}/chat/completions`, {
+    method: "POST",
+    body: JSON.stringify({ model: "model-text", messages: [] }),
+  })
+  assert.equal(response.status, 401)
+  assert.equal(response.headers.get("X-Magpie-Sign-In"), "expired")
+  assert.equal(tokenCalls, 2)
+  assert.equal(gatewayCalls, 2)
+})
+
+test("browser seats adopt the desktop login when the same account is active", async () => {
+  const userDataDir = makeDesktopLoginDir({ accountId: "acct-desktop", name: "EFate8", cookieValue: "desktop-cookie" })
+  const plugin = await DuMateProxyPlugin({ config: { userDataDir }, catalog })
+  const refreshed = await plugin.auth.refresh({
+    type: "success",
+    source: "browser",
+    uid: "acct-desktop",
+    accountId: "EFate8",
+    cookies: [{ name: "bce-sessionid", value: "old-cookie", domain: ".baidu.com" }],
+  })
+  assert.equal(refreshed.type, "success")
+  assert.equal(refreshed.source, "desktop")
+  assert.equal(refreshed.uid, "acct-desktop")
+  assert.equal(refreshed.cookies[0].value, "desktop-cookie")
+
+  const other = await plugin.auth.refresh({
+    type: "success",
+    source: "manual",
+    uid: "acct-other",
+    accountId: "Other",
+    cookies: [{ name: "bce-sessionid", value: "old-cookie", domain: ".baidu.com" }],
+  })
+  assert.equal(other, undefined)
 })
